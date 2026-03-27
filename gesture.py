@@ -2,6 +2,8 @@ import cv2
 import mediapipe as mp  # type: ignore
 import requests
 import time
+import threading
+import speech_recognition as sr
 
 BLYNK_TOKEN = "uQcOFSmKoKYwxHxJ-2trKV5tkCDYjqnU"
 BLYNK_BASE = "https://blynk.cloud/external/api"
@@ -10,7 +12,7 @@ mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
     static_image_mode=False,
     max_num_hands=2,
-    model_complexity=0,   # 🔥 faster model
+    model_complexity=0,
     min_detection_confidence=0.7,
     min_tracking_confidence=0.6
 )
@@ -18,21 +20,12 @@ hands = mp_hands.Hands(
 mp_drawing = mp.solutions.drawing_utils
 
 
-class GestureController:
+class Controller:
 
     def __init__(self):
+        self.prev_state = [-1, -1, -1]
         self.last_action_time = 0
         self.action_delay = 0.3
-
-        # 🔥 NEW: state tracking (avoid repeated calls)
-        self.prev_state = [-1, -1, -1]
-
-        # 🔥 NEW: detection smoothing
-        self.hand_present = False
-        self.hand_detected_time = 0
-        self.warmup_delay = 0.3
-
-    # ---------------- SEND TO BLYNK ----------------
 
     def set_led(self, index, value):
         try:
@@ -44,18 +37,99 @@ class GestureController:
             pass
 
 
-# ---------------- MAIN ----------------
+controller = Controller()
+
+# ---------------- VOICE IMPROVED ----------------
+
+def normalize_command(command):
+    command = command.lower()
+
+    replacements = {
+        "one": "1",
+        "two": "2",
+        "too": "2",
+        "to": "2",
+        "three": "3",
+        "first": "1",
+        "second": "2",
+        "third": "3"
+    }
+
+    for k, v in replacements.items():
+        command = command.replace(k, v)
+
+    return command
+
+
+def extract_lights(command):
+    lights = []
+    for i in ["1", "2", "3"]:
+        if i in command:
+            lights.append(int(i) - 1)
+    return list(set(lights))
+
+
+def detect_action(command):
+    if any(word in command for word in ["on", "start", "activate"]):
+        return "on"
+    elif any(word in command for word in ["off", "stop", "deactivate"]):
+        return "off"
+    return None
+
+
+def voice_listener():
+    recognizer = sr.Recognizer()
+    mic = sr.Microphone()
+
+    recognizer.energy_threshold = 300
+    recognizer.dynamic_energy_threshold = True
+
+    while True:
+        try:
+            with mic as source:
+                recognizer.adjust_for_ambient_noise(source)
+                print("🎤 Listening...")
+                audio = recognizer.listen(source, phrase_time_limit=3)
+
+            command = recognizer.recognize_google(audio).lower()
+            print("You said:", command)
+
+            # 🔥 Normalize command
+            command = normalize_command(command)
+            print("Normalized:", command)
+
+            lights = extract_lights(command)
+            action = detect_action(command)
+
+            # -------- ALL LIGHTS --------
+            if "all" in command and action:
+                for i in range(3):
+                    controller.set_led(i, 1 if action == "on" else 0)
+
+            # -------- INDIVIDUAL / MULTI --------
+            elif lights and action:
+                for i in lights:
+                    controller.set_led(i, 1 if action == "on" else 0)
+
+            else:
+                print("⚠️ No valid command")
+
+        except Exception as e:
+            print("Error:", e)
+            continue
+
+
+# Run voice in background thread
+threading.Thread(target=voice_listener, daemon=True).start()
+
+# ---------------- GESTURE ----------------
 
 def main():
     cap = cv2.VideoCapture(0)
-
-    # 🔥 Reduce resolution (helps stability)
     cap.set(3, 640)
     cap.set(4, 480)
 
-    controller = GestureController()
-
-    print("Gesture Smart Switch Ready")
+    print("System Ready (Gesture + Voice)")
 
     while True:
         ret, frame = cap.read()
@@ -68,29 +142,18 @@ def main():
 
         current_time = time.time()
 
-        # ---------------- HAND DETECTED ----------------
         if results.multi_hand_landmarks:
-
-            # 🔥 Warmup handling
-            if not controller.hand_present:
-                controller.hand_present = True
-                controller.hand_detected_time = current_time
-
-            if current_time - controller.hand_detected_time < controller.warmup_delay:
-                cv2.imshow("Gesture Smart Switch", frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-                continue
 
             hands_data = []
 
             for hand in results.multi_hand_landmarks:
-                # Optional: comment for extra FPS
-                # mp_drawing.draw_landmarks(frame, hand, mp_hands.HAND_CONNECTIONS)
+                mp_drawing.draw_landmarks(
+                    frame,
+                    hand,
+                    mp_hands.HAND_CONNECTIONS
+                )
 
-                landmarks = hand.landmark
-
-                lm = [[p.x, p.y] for p in landmarks]
+                lm = [[p.x, p.y] for p in hand.landmark]
                 tips = [8, 12, 16]
                 pips = [6, 10, 14]
 
@@ -100,22 +163,20 @@ def main():
 
                 hands_data.append(fingers)
 
-            # -------- CONTROL LOGIC --------
             if current_time - controller.last_action_time > controller.action_delay:
 
-                # -------- SINGLE HAND (ON / EXACT MAPPING) --------
+                # SINGLE HAND
                 if len(hands_data) == 1:
-
                     fingers = hands_data[0]
 
                     for i in range(3):
                         if fingers[i] != controller.prev_state[i]:
                             controller.set_led(i, fingers[i])
-                            time.sleep(0.05)  # 🔥 prevent burst
+                            time.sleep(0.05)
 
                     controller.prev_state = fingers.copy()
 
-                # -------- TWO HANDS (OFF) --------
+                # TWO HANDS (OFF)
                 elif len(hands_data) == 2:
 
                     h1, h2 = hands_data
@@ -129,19 +190,12 @@ def main():
 
                     if on_hand:
                         for i in range(3):
-                            if on_hand[i] == 1 and controller.prev_state[i] != 0:
+                            if on_hand[i] == 1:
                                 controller.set_led(i, 0)
-                                time.sleep(0.05)
-
-                        controller.prev_state = [0 if on_hand[i] == 1 else controller.prev_state[i] for i in range(3)]
 
                 controller.last_action_time = current_time
 
-        else:
-            # 🔥 Reset detection state
-            controller.hand_present = False
-
-        cv2.imshow("Gesture Smart Switch", frame)
+        cv2.imshow("Smart Control System", frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
