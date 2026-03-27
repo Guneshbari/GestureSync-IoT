@@ -1,0 +1,405 @@
+:root {
+    /* Theme constraints from user */
+    --bg-color: #121212;
+    --card-bg: #1E1E1E;
+    --primary: #E0B973;        /* Soft gold / premium yellow */
+    --secondary: #8E8E8E;      /* Muted gray */
+    --accent: #FF8C42;         /* Burnt orange */
+    --text-main: #FFFFFF;
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    --glow-primary: rgba(224, 185, 115, 0.15);
+    --glow-accent: rgba(255, 140, 66, 0.15);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    /* Anti-aliasing for cleaner text rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.dashboard {
+    width: 100%;
+    max-width: 480px; /* Mobile layout constraint */
+    padding: 40px 24px 120px 24px; /* Extrapadding bottom for the voice mic */
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    position: relative;
+}
+
+/* ---------------- HEADER ---------------- */
+header {
+    text-align: center;
+    margin-bottom: 4px;
+}
+h1 {
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: -0.5px;
+    color: var(--text-main);
+}
+h2 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-top: 6px;
+}
+
+/* ---------------- STATUS DSIPLAY ---------------- */
+.status-display {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--glass-border);
+    padding: 12px 20px;
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 0 auto;
+    min-width: 200px;
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--glow-primary);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.status-text {
+    font-size: 13px;
+    color: var(--secondary);
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    transition: color 0.3s ease;
+}
+
+/* ---------------- SECTIONS COMMON ---------------- */
+.section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--secondary);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 14px;
+    padding-left: 4px;
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: var(--card-shadow);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    /* Matte texture hint */
+    backdrop-filter: blur(10px);
+}
+
+/* Subtle glossy top corner reflection */
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 60%);
+    pointer-events: none;
+}
+
+/* ---------------- LIGHTS GRID ---------------- */
+.lights-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+
+.light-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 12px;
+    gap: 16px;
+}
+
+.light-icon-wrapper {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.light-card i {
+    font-size: 20px;
+    color: var(--secondary);
+    transition: color 0.3s ease;
+}
+
+.card-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--secondary);
+    transition: color 0.3s ease;
+}
+
+/* Active Light State */
+.light-card.active {
+    border-color: rgba(224, 185, 115, 0.4);
+    background: #23221E; 
+}
+
+.light-card.active .light-icon-wrapper {
+    background: var(--glow-primary);
+}
+
+.light-card.active i {
+    color: var(--primary);
+    text-shadow: 0 0 12px rgba(224, 185, 115, 0.6);
+}
+
+.light-card.active .card-label {
+    color: var(--primary);
+}
+
+/* ---------------- MOTOR / FAN CARD ---------------- */
+.motor-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+}
+
+.motor-card-left {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.motor-icon-wrapper {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.motor-card i {
+    font-size: 24px;
+    color: var(--secondary);
+    transition: all 0.3s ease;
+}
+
+.motor-card.active i {
+    color: var(--accent);
+    animation: spin 1.5s linear infinite;
+}
+
+/* Active Motor State */
+.motor-card.active {
+    border-color: rgba(255, 140, 66, 0.4);
+    background: #24201C;
+}
+
+.motor-card.active .motor-icon-wrapper {
+    background: var(--glow-accent);
+}
+
+.motor-card.active .card-label {
+    color: var(--text-main);
+}
+
+/* Toggle switch component */
+.toggle-switch {
+    width: 50px;
+    height: 28px;
+    background: #111111;
+    border-radius: 14px;
+    position: relative;
+    border: 1px solid var(--glass-border);
+    transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+}
+
+.toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    background: var(--secondary);
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.card.active.motor-card .toggle-switch {
+    background: rgba(255, 140, 66, 0.2);
+    border-color: var(--accent);
+}
+
+.card.active.motor-card .toggle-switch::after {
+    left: 25px;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+}
+
+/* ---------------- GLOBAL CONTROLS ---------------- */
+.global-controls {
+    display: flex;
+    gap: 16px;
+}
+
+.btn-global {
+    flex: 1;
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+    background: var(--card-bg);
+    color: var(--secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: var(--card-shadow);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    outline: none;
+}
+
+.btn-global:active {
+    transform: scale(0.96);
+}
+
+.btn-global.btn-on {
+    color: var(--primary);
+}
+
+.btn-global.btn-on i {
+    color: var(--primary);
+}
+
+.btn-global.btn-off {
+    color: var(--secondary);
+}
+
+/* ---------------- VOICE BUTTON ---------------- */
+.voice-section {
+    position: fixed;
+    bottom: 30px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    z-index: 100;
+    pointer-events: none; /* Let touches pass through the row */
+}
+
+.mic-btn-wrapper {
+    position: relative;
+    pointer-events: auto;
+}
+
+.mic-btn {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #262626, #1A1A1A);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 10;
+}
+
+.mic-btn i {
+    font-size: 24px;
+    color: var(--secondary);
+    transition: color 0.3s ease;
+}
+
+/* Ripple layers for active state */
+.ripple {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--primary);
+    opacity: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Listening State */
+.mic-btn.listening {
+    border-color: rgba(224, 185, 115, 0.5);
+    background: #24221C;
+}
+
+.mic-btn.listening i {
+    color: var(--primary);
+    text-shadow: 0 0 12px var(--glow-primary);
+}
+
+.mic-btn.listening + .ripple {
+    animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.mic-btn.listening + .ripple + .ripple {
+    animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    animation-delay: 1s;
+}
+
+@keyframes pulse-ring {
+    0% {
+        width: 68px;
+        height: 68px;
+        opacity: 0.3;
+    }
+    100% {
+        width: 160px;
+        height: 160px;
+        opacity: 0;
+    }
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}

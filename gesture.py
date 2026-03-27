@@ -20,6 +20,8 @@ hands = mp_hands.Hands(
 mp_drawing = mp.solutions.drawing_utils
 
 
+# ---------------- CONTROLLER ----------------
+
 class Controller:
 
     def __init__(self):
@@ -27,10 +29,10 @@ class Controller:
         self.last_action_time = 0
         self.action_delay = 0.3
 
-    def set_led(self, index, value):
+    def set_device(self, pin, value):
         try:
             requests.get(
-                f"{BLYNK_BASE}/update?token={BLYNK_TOKEN}&V{index}={value}",
+                f"{BLYNK_BASE}/update?token={BLYNK_TOKEN}&V{pin}={value}",
                 timeout=1
             )
         except:
@@ -39,7 +41,8 @@ class Controller:
 
 controller = Controller()
 
-# ---------------- VOICE IMPROVED ----------------
+
+# ---------------- VOICE HELPERS ----------------
 
 def normalize_command(command):
     command = command.lower()
@@ -77,6 +80,18 @@ def detect_action(command):
     return None
 
 
+def control_motor(command, action):
+    if "fan" in command or "motor" in command:
+        if action == "on":
+            controller.set_device(5, 1)   # V5
+        elif action == "off":
+            controller.set_device(5, 0)
+        return True
+    return False
+
+
+# ---------------- VOICE CONTROL ----------------
+
 def voice_listener():
     recognizer = sr.Recognizer()
     mic = sr.Microphone()
@@ -94,22 +109,25 @@ def voice_listener():
             command = recognizer.recognize_google(audio).lower()
             print("You said:", command)
 
-            # 🔥 Normalize command
             command = normalize_command(command)
             print("Normalized:", command)
 
             lights = extract_lights(command)
             action = detect_action(command)
 
-            # -------- ALL LIGHTS --------
-            if "all" in command and action:
-                for i in range(3):
-                    controller.set_led(i, 1 if action == "on" else 0)
+            # -------- MOTOR --------
+            if control_motor(command, action):
+                pass
 
-            # -------- INDIVIDUAL / MULTI --------
+            # -------- ALL LIGHTS --------
+            elif "all" in command and action:
+                for i in range(3):
+                    controller.set_device(i, 1 if action == "on" else 0)
+
+            # -------- INDIVIDUAL LIGHTS --------
             elif lights and action:
                 for i in lights:
-                    controller.set_led(i, 1 if action == "on" else 0)
+                    controller.set_device(i, 1 if action == "on" else 0)
 
             else:
                 print("⚠️ No valid command")
@@ -119,8 +137,9 @@ def voice_listener():
             continue
 
 
-# Run voice in background thread
+# Run voice in background
 threading.Thread(target=voice_listener, daemon=True).start()
+
 
 # ---------------- GESTURE ----------------
 
@@ -129,7 +148,7 @@ def main():
     cap.set(3, 640)
     cap.set(4, 480)
 
-    print("System Ready (Gesture + Voice)")
+    print("System Ready (Gesture + Voice + Motor)")
 
     while True:
         ret, frame = cap.read()
@@ -165,18 +184,18 @@ def main():
 
             if current_time - controller.last_action_time > controller.action_delay:
 
-                # SINGLE HAND
+                # -------- SINGLE HAND --------
                 if len(hands_data) == 1:
                     fingers = hands_data[0]
 
                     for i in range(3):
                         if fingers[i] != controller.prev_state[i]:
-                            controller.set_led(i, fingers[i])
+                            controller.set_device(i, fingers[i])
                             time.sleep(0.05)
 
                     controller.prev_state = fingers.copy()
 
-                # TWO HANDS (OFF)
+                # -------- TWO HANDS (OFF) --------
                 elif len(hands_data) == 2:
 
                     h1, h2 = hands_data
@@ -191,7 +210,7 @@ def main():
                     if on_hand:
                         for i in range(3):
                             if on_hand[i] == 1:
-                                controller.set_led(i, 0)
+                                controller.set_device(i, 0)
 
                 controller.last_action_time = current_time
 
