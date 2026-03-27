@@ -21,8 +21,8 @@ mp_drawing = mp.solutions.drawing_utils
 class GestureController:
 
     def __init__(self):
-        self.last_action_time = 0
-        self.action_delay = 0.5   # slightly increased for stability
+        self.last_action_time = 0.0
+        self.action_delay = 0.5
 
     # ---------------- SEND TO BLYNK ----------------
 
@@ -59,35 +59,18 @@ class GestureController:
 
         return fingers
 
-    # ---------------- BRIGHTNESS ----------------
-
-    def palm_brightness(self, landmarks):
-        wrist = landmarks[0]
-        middle = landmarks[12]
-
-        distance = math.sqrt(
-            (wrist.x - middle.x) ** 2 +
-            (wrist.y - middle.y) ** 2
-        )
-
-        min_d = 0.05
-        max_d = 0.25
-
-        brightness = int(((distance - min_d) / (max_d - min_d)) * 255)
-        return max(0, min(255, brightness))
-
-
-# ---------------- MAIN ----------------
+    # ---------------- MAIN ----------------
 
 def main():
     cap = cv2.VideoCapture(0)
     controller = GestureController()
 
     print("Controls:")
-    print("1 finger → ON specific LED")
-    print("3 fingers → ALL ON")
-    print("fist + 1 finger → OFF specific LED")
-    print("fist + 3 fingers → ALL OFF")
+    print("Index → LED1")
+    print("Middle → LED2")
+    print("Ring → LED3")
+    print("Combinations → exact LED combinations")
+    print("Fist + fingers → turn OFF LEDs")
     print("Q → Quit")
 
     while True:
@@ -119,25 +102,21 @@ def main():
             # -------- DELAY CONTROL --------
             if current_time - controller.last_action_time > controller.action_delay:
 
-                # -------- SINGLE HAND (TURN ON) --------
+                # -------- SINGLE HAND (ON / EXACT MAPPING) --------
                 if len(hands_data) == 1:
 
                     fingers = hands_data[0]
-                    count = sum(fingers)
 
-                    if count == 3:
-                        controller.set_all(1)
+                    # Direct mapping (IMPORTANT FIX)
+                    for i in range(3):
+                        controller.set_led(i, fingers[i])
 
-                    elif count == 1:
-                        for i in range(3):
-                            if fingers[i] == 1:
-                                controller.set_led(i, 1)
-
-                # -------- TWO HANDS (TURN OFF) --------
+                # -------- TWO HANDS (OFF) --------
                 elif len(hands_data) == 2:
 
                     h1, h2 = hands_data
 
+                    # detect fist + active hand
                     if sum(h1) == 0:
                         on_hand = h2
                     elif sum(h2) == 0:
@@ -146,15 +125,10 @@ def main():
                         on_hand = None
 
                     if on_hand:
-                        count = sum(on_hand)
-
-                        if count == 3:
-                            controller.set_all(0)
-
-                        elif count == 1:
-                            for i in range(3):
-                                if on_hand[i] == 1:
-                                    controller.set_led(i, 0)
+                        # Turn OFF only those LEDs
+                        for i in range(3):
+                            if on_hand[i] == 1:
+                                controller.set_led(i, 0)
 
                 controller.last_action_time = current_time
 
