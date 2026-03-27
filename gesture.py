@@ -1,16 +1,17 @@
 import cv2
 import mediapipe as mp  # type: ignore
-import socket
+import requests
 import math
 import time
+import threading
 
-ESP32_IP = "172.20.10.3"
-ESP32_PORT = 80
+BLYNK_TOKEN = "uQcOFSmKoKYwxHxJ-2trKV5tkCDYjqnU"
+BLYNK_BASE = "https://blynk.cloud/external/api"
 
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
     static_image_mode=False,
-    max_num_hands=2,  # IMPORTANT: 2 hands
+    max_num_hands=2,
     min_detection_confidence=0.8,
     min_tracking_confidence=0.7
 )
@@ -21,45 +22,80 @@ mp_drawing = mp.solutions.drawing_utils
 class GestureController:
 
     def __init__(self):
-        self.socket = None
         self.current_led_state = [0, 0, 0]
-
-        # Delay lock (prevents repeated triggers)
         self.last_action_time = 0
         self.action_delay = 0.4
 
-    # ---------------- ESP32 CONNECTION ----------------
+        self.blynk_busy = False
 
-    def connect_esp32(self):
+        # Idle sync — only runs when no hand is present
+        self.last_sync_time = 0
+        self.sync_interval = 3.0  # sync from Blynk every 3 seconds when idle
+
+    # ---------------- PUSH ONLY (no read — local state is trusted) ----------------
+
+    def _push_to_blynk(self, state, brightness):
+        """Just pushes state to Blynk. No read. No stale data interference."""
         try:
-            if self.socket:
-                self.socket.close()
+            for i, pin in enumerate(["V0", "V1", "V2"]):
+                requests.get(
+                    f"{BLYNK_BASE}/update?token={BLYNK_TOKEN}&{pin}={state[i]}",
+                    timeout=2
+                )
+            requests.get(
+                f"{BLYNK_BASE}/update?token={BLYNK_TOKEN}&V4={brightness}",
+                timeout=2
+            )
+            all_on = 1 if all(s == 1 for s in state) else 0
+            requests.get(
+                f"{BLYNK_BASE}/update?token={BLYNK_TOKEN}&V3={all_on}",
+                timeout=2
+            )
+            print(f"LED pushed: {state} | Brightness: {brightness}")
+        except Exception as e:
+            print(f"Blynk push error: {e}")
+        finally:
+            self.blynk_busy = False
 
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.settimeout(3)
-            self.socket.connect((ESP32_IP, ESP32_PORT))
+    def trigger_blynk(self, state, brightness):
+        if self.blynk_busy:
+            return
+        self.blynk_busy = True
+        t = threading.Thread(
+            target=self._push_to_blynk,
+            args=(state, brightness),
+            daemon=True
+        )
+        t.start()
 
-            print("Connected to ESP32")
-            return True
+    # ---------------- IDLE SYNC (runs when no hand detected) ----------------
 
-        except:
-            self.socket = None
-            print("ESP32 connection failed")
-            return False
-
-    def send_command(self, command):
-        if not self.socket:
-            if not self.connect_esp32():
-                return False
-
+    def _sync_from_blynk(self):
+        """Reads Blynk state when idle — picks up any switch changes."""
         try:
-            self.socket.send((command + '\n').encode())
-            self.socket.recv(1024)
-            return True
+            synced = []
+            for pin in ["V0", "V1", "V2"]:
+                r = requests.get(
+                    f"{BLYNK_BASE}/get?token={BLYNK_TOKEN}&{pin}",
+                    timeout=2
+                )
+                synced.append(int(float(r.text.strip())))
+            self.current_led_state = synced
+            print(f"Idle sync from Blynk: {synced}")
+        except Exception as e:
+            print(f"Blynk sync error: {e}")
+        finally:
+            self.blynk_busy = False
 
-        except:
-            self.socket = None
-            return False
+    def trigger_idle_sync(self):
+        if self.blynk_busy:
+            return
+        self.blynk_busy = True
+        t = threading.Thread(
+            target=self._sync_from_blynk,
+            daemon=True
+        )
+        t.start()
 
     # ---------------- FINGER DETECTION ----------------
 
@@ -67,16 +103,11 @@ class GestureController:
         lm = [[p.x, p.y] for p in landmarks]
 
         fingers = []
-
-        # Only Index, Middle, Ring
         tips = [8, 12, 16]
         pips = [6, 10, 14]
 
         for tip, pip in zip(tips, pips):
-            if lm[tip][1] < lm[pip][1]:
-                fingers.append(1)
-            else:
-                fingers.append(0)
+            fingers.append(1 if lm[tip][1] < lm[pip][1] else 0)
 
         return fingers
 
@@ -95,15 +126,7 @@ class GestureController:
         max_d = 0.25
 
         brightness = int(((distance - min_d) / (max_d - min_d)) * 255)
-        brightness = max(0, min(255, brightness))
-
-        return brightness
-
-    # ---------------- CLEANUP ----------------
-
-    def cleanup(self):
-        if self.socket:
-            self.socket.close()
+        return max(0, min(255, brightness))
 
 
 # ---------------- MAIN ----------------
@@ -111,8 +134,6 @@ class GestureController:
 def main():
     cap = cv2.VideoCapture(0)
     controller = GestureController()
-
-    controller.connect_esp32()
 
     while True:
         ret, frame = cap.read()
@@ -125,91 +146,83 @@ def main():
 
         current_time = time.time()
 
+        # ---------------- HAND DETECTED ----------------
         if results.multi_hand_landmarks:
 
             hands_data = []
-            brightness = 150  # default
+            brightness = 150
 
             for hand in results.multi_hand_landmarks:
-
-                mp_drawing.draw_landmarks(
-                    frame,
-                    hand,
-                    mp_hands.HAND_CONNECTIONS
-                )
+                mp_drawing.draw_landmarks(frame, hand, mp_hands.HAND_CONNECTIONS)
 
                 landmarks = hand.landmark
-
                 fingers = controller.get_finger_states(landmarks)
                 hands_data.append(fingers)
 
                 brightness = controller.palm_brightness(landmarks)
 
-            # ---------------- ACTION LOCK ----------------
             if current_time - controller.last_action_time > controller.action_delay:
 
-                # -------- SINGLE HAND → TURN ON --------
+                # Local state is source of truth — no Blynk read here
+                new_state = controller.current_led_state.copy()
+
+                # -------- SINGLE HAND (ON) --------
                 if len(hands_data) == 1:
 
                     fingers = hands_data[0]
+                    count = sum(fingers)
 
-                    # ALL ON
-                    if sum(fingers) == 3:
-                        controller.current_led_state = [1, 1, 1]
+                    if count == 3:
+                        new_state = [1, 1, 1]
 
-                    else:
+                    elif count == 1:
                         for i in range(3):
                             if fingers[i] == 1:
-                                controller.current_led_state[i] = 1
+                                new_state[i] = 1
 
-                # -------- TWO HANDS → TURN OFF --------
+                # -------- TWO HANDS (OFF) --------
                 elif len(hands_data) == 2:
 
                     h1, h2 = hands_data
 
-                    # Find fist hand
                     if sum(h1) == 0:
-                        off_hand = h1
                         on_hand = h2
                     elif sum(h2) == 0:
-                        off_hand = h2
                         on_hand = h1
                     else:
                         on_hand = None
 
                     if on_hand:
+                        count = sum(on_hand)
 
-                        # ALL OFF
-                        if sum(on_hand) == 3:
-                            controller.current_led_state = [0, 0, 0]
+                        if count == 3:
+                            new_state = [0, 0, 0]
 
-                        else:
+                        elif count == 1:
                             for i in range(3):
                                 if on_hand[i] == 1:
-                                    controller.current_led_state[i] = 0
+                                    new_state[i] = 0
 
-                # -------- SEND COMMAND --------
-                led_string = ",".join(map(str, controller.current_led_state))
-                command = f"LED:{led_string},{brightness}"
-
-                controller.send_command(command)
-
-                print(f"LED State: {controller.current_led_state}")
+                # Only push if state actually changed
+                if new_state != controller.current_led_state:
+                    controller.current_led_state = new_state  # update immediately
+                    controller.trigger_blynk(new_state, brightness)
 
                 controller.last_action_time = current_time
+
+        # ---------------- NO HAND — IDLE SYNC ----------------
+        else:
+            # Periodically sync from Blynk to catch switch changes
+            if current_time - controller.last_sync_time > controller.sync_interval:
+                controller.trigger_idle_sync()
+                controller.last_sync_time = current_time
 
         cv2.imshow("ESP32 Gesture Smart Switch", frame)
 
         key = cv2.waitKey(1) & 0xFF
-
         if key == ord('q'):
             break
-        elif key == ord('c'):
-            controller.send_command("CLEAR")
-        elif key == ord('t'):
-            controller.send_command("TEST")
 
-    controller.cleanup()
     cap.release()
     cv2.destroyAllWindows()
 

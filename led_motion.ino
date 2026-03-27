@@ -1,143 +1,82 @@
+#define BLYNK_TEMPLATE_ID "TMPL3RvORlrpn"
+#define BLYNK_TEMPLATE_NAME "SL Project"
+#define BLYNK_AUTH_TOKEN "uQcOFSmKoKYwxHxJ-2trKV5tkCDYjqnU"
+#include <BlynkSimpleEsp32.h>
 #include <WiFi.h>
 
+
+// -------- WIFI --------
 const char *ssid = "iPhone";
 const char *password = "1234567890";
 
-WiFiServer server(80);
+// -------- LED PINS --------
+int ledPins[] = {5, 18, 19};
+int numLeds = 3;
 
-// LED pins - using different pins that work better
-int ledPins[] = {5, 18, 19, 21, 22}; // your 5 LEDs
-int numLeds = 5;
+// -------- STATE --------
+int ledState[3] = {0, 0, 0};
+int brightness = 150;
 
-// PWM settings
-int freq = 5000;
-int resolution = 8;
-
+// -------- SETUP --------
 void setup() {
   Serial.begin(115200);
 
-  // Setup each LED for PWM using ESP32 Board Manager 3.0 API
   for (int i = 0; i < numLeds; i++) {
     pinMode(ledPins[i], OUTPUT);
-    ledcAttach(ledPins[i], freq, resolution);
-    analogWrite(ledPins[i], 0); // start OFF
-  }
-
-  Serial.println("Testing LEDs on startup...");
-  for (int i = 0; i < numLeds; i++) {
-    analogWrite(ledPins[i], 100);
-    delay(200);
-    analogWrite(ledPins[i], 0);
-    delay(100);
-  }
-  Serial.println("LED test complete");
-
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nWiFi connected!");
-  Serial.print("ESP32 IP: ");
-  Serial.println(WiFi.localIP());
-
-  server.begin();
-  Serial.println("TCP Server started on port 80");
-}
-
-void loop() {
-  WiFiClient client = server.available();
-
-  if (client) {
-    Serial.println("New client connected!");
-
-    while (client.connected()) {
-      if (client.available()) {
-        String request = client.readStringUntil('\n');
-        request.trim();
-
-        Serial.println("Received: " + request);
-
-        // Parse different commands
-        if (request.startsWith("FINGERS:")) {
-          // Format: "FINGERS:count,brightness"
-          int comma = request.indexOf(',');
-          if (comma > 0) {
-            int fingerCount = request.substring(8, comma).toInt();
-            int brightness = request.substring(comma + 1).toInt();
-
-            controlFingerLEDs(fingerCount, brightness);
-            client.println("OK");
-          }
-        } else if (request == "CLEAR") {
-          turnOffAllLEDs();
-          client.println("CLEARED");
-        } else if (request == "TEST") {
-          testAllLEDs();
-          client.println("TESTED");
-        } else {
-          // Simple brightness control
-          int brightness = request.toInt();
-          if (brightness >= 0 && brightness <= 255) {
-            setAllLEDs(brightness);
-            client.println("OK");
-          }
-        }
-      }
-    }
-
-    client.stop();
-    Serial.println("Client disconnected");
-  }
-}
-
-void controlFingerLEDs(int fingerCount, int brightness) {
-  fingerCount = constrain(fingerCount, 0, 5);
-  brightness = constrain(brightness, 0, 255);
-
-  Serial.printf("Fingers: %d, Brightness: %d\n", fingerCount, brightness);
-
-  for (int i = 0; i < numLeds; i++) {
-    if (i < fingerCount) {
-      analogWrite(ledPins[i], brightness);
-    } else {
-      analogWrite(ledPins[i], 0);
-    }
-  }
-}
-
-void setAllLEDs(int brightness) {
-  brightness = constrain(brightness, 0, 255);
-  Serial.printf("All LEDs brightness: %d\n", brightness);
-
-  for (int i = 0; i < numLeds; i++) {
-    analogWrite(ledPins[i], brightness);
-  }
-}
-
-void turnOffAllLEDs() {
-  for (int i = 0; i < numLeds; i++) {
     analogWrite(ledPins[i], 0);
   }
-  Serial.println("All LEDs OFF");
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, password);
+  Serial.println("System Ready!");
 }
 
-void testAllLEDs() {
-  Serial.println("Testing all LEDs...");
-
+// -------- APPLY LED STATE --------
+void applyLEDs() {
   for (int i = 0; i < numLeds; i++) {
-    analogWrite(ledPins[i], 150);
-    delay(300);
-    analogWrite(ledPins[i], 0);
-    delay(100);
+    analogWrite(ledPins[i], ledState[i] ? brightness : 0);
   }
 
-  for (int i = 0; i < numLeds; i++) {
-    analogWrite(ledPins[i], 100);
-  }
-  delay(1000);
+  // Keep Blynk UI in sync
+  Blynk.virtualWrite(V0, ledState[0]);
+  Blynk.virtualWrite(V1, ledState[1]);
+  Blynk.virtualWrite(V2, ledState[2]);
 
-  turnOffAllLEDs();
-  Serial.println("Test complete");
+  int allState = (ledState[0] && ledState[1] && ledState[2]) ? 1 : 0;
+  Blynk.virtualWrite(V3, allState);
 }
+
+// -------- BLYNK HANDLERS --------
+
+// Individual LED controls
+BLYNK_WRITE(V0) {
+  ledState[0] = param.asInt();
+  applyLEDs();
+}
+
+BLYNK_WRITE(V1) {
+  ledState[1] = param.asInt();
+  applyLEDs();
+}
+
+BLYNK_WRITE(V2) {
+  ledState[2] = param.asInt();
+  applyLEDs();
+}
+
+// Master toggle (all on / all off)
+BLYNK_WRITE(V3) {
+  int val = param.asInt();
+  for (int i = 0; i < numLeds; i++) {
+    ledState[i] = val;
+  }
+  applyLEDs();
+}
+
+// Brightness
+BLYNK_WRITE(V4) {
+  brightness = param.asInt();
+  applyLEDs();
+}
+
+// -------- LOOP --------
+void loop() { Blynk.run(); }
