@@ -2,16 +2,20 @@
 #define BLYNK_TEMPLATE_NAME "SL Project"
 #define BLYNK_AUTH_TOKEN "uQcOFSmKoKYwxHxJ-2trKV5tkCDYjqnU"
 
-#include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
+#include <WiFi.h>
+
 
 // -------- WIFI --------
-const char* ssid = "iPhone";
-const char* password = "1234567890";
+const char *ssid = "iPhone";
+const char *password = "1234567890";
 
 // -------- LED PINS --------
 int ledPins[] = {5, 18, 19};
 int numLeds = 3;
+
+// -------- MOTOR PIN --------
+int motorPin = 23; // Fan / Motor
 
 // -------- PWM SETTINGS --------
 int freq = 5000;
@@ -25,13 +29,19 @@ int brightness = 150;
 void setup() {
   Serial.begin(115200);
 
-  // 🔥 FIX: Proper PWM attach (ESP32 Core 3.x)
+  // LED SETUP
   for (int i = 0; i < numLeds; i++) {
     ledcAttach(ledPins[i], freq, resolution);
     ledcWrite(ledPins[i], 0);
   }
 
+  // MOTOR SETUP
+  ledcAttach(motorPin, freq, resolution);
+  ledcWrite(motorPin, 0);
+
+  // Blynk
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, password);
+
   Serial.println("System Ready!");
 }
 
@@ -41,7 +51,7 @@ void applyLEDs() {
     ledcWrite(ledPins[i], ledState[i] ? brightness : 0);
   }
 
-  // Sync Blynk UI
+  // Sync UI
   Blynk.virtualWrite(V0, ledState[0]);
   Blynk.virtualWrite(V1, ledState[1]);
   Blynk.virtualWrite(V2, ledState[2]);
@@ -52,23 +62,25 @@ void applyLEDs() {
 
 // -------- BLYNK HANDLERS --------
 
-// Individual LEDs
+// Light 1
 BLYNK_WRITE(V0) {
   ledState[0] = param.asInt();
   applyLEDs();
 }
 
+// Light 2
 BLYNK_WRITE(V1) {
   ledState[1] = param.asInt();
   applyLEDs();
 }
 
+// Light 3
 BLYNK_WRITE(V2) {
   ledState[2] = param.asInt();
   applyLEDs();
 }
 
-// Master switch
+// ALL LIGHTS (ONLY LIGHTS, NOT MOTOR)
 BLYNK_WRITE(V3) {
   int val = param.asInt();
   for (int i = 0; i < numLeds; i++) {
@@ -83,7 +95,14 @@ BLYNK_WRITE(V4) {
   applyLEDs();
 }
 
-// -------- LOOP --------
-void loop() {
-  Blynk.run();
+// -------- MOTOR CONTROL --------
+BLYNK_WRITE(V5) {
+  int val = param.asInt();
+  ledcWrite(motorPin, val ? 255 : 0);
+
+  Serial.print("Motor State: ");
+  Serial.println(val ? "ON" : "OFF");
 }
+
+// -------- LOOP --------
+void loop() { Blynk.run(); }
