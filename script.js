@@ -252,101 +252,92 @@ function normalizeNumbersFromCommand(command) {
 }
 
 function handleVoiceCommand(command) {
-    if (/\b(on\s+and\s+off|off\s+and\s+on)\b/i.test(command)) {
-        setStatus('Ignored due to ambiguity', 'default');
-        return;
-    }
-
-    let results = [];
+    const results = [];
     let lastAction = null;
 
-    // Split command using 'then' first for sequential execution
+    const ON_WORDS = ["on", "start", "activate"];
+    const OFF_WORDS = ["off", "stop", "deactivate", "shut", "halt"];
+
+    const hasOn = seg => ON_WORDS.some(w => seg.includes(w));
+    const hasOff = seg => OFF_WORDS.some(w => seg.includes(w));
+
+    // Split: 'then' → sequential blocks, 'and'/',' → parallel parts
     const sequences = command.split(/\s+then\s+/);
 
-    sequences.forEach(sequence => {
-        // Within each segment, split using 'and' or ','
-        const parts = sequence.split(/\s+and\s+|,/);
+    for (const sequence of sequences) {
+        const parts = sequence.split(/\s+and\s+|,/).map(p => p.trim()).filter(Boolean);
 
-        parts.forEach(part => {
-            part = part.trim();
-            if (!part) return;
+        for (const part of parts) {
+            const partHasOn = hasOn(part);
+            const partHasOff = hasOff(part);
 
-            const isOn = ["on", "start", "activate"].some(w => part.includes(w));
-            const isOff = ["off", "stop", "deactivate", "shut", "halt"].some(w => part.includes(w));
-
-            let targetState = null;
-
-            // Strict action resolution
-            if (isOn && !isOff) {
+            // ── Strict action resolution (no ON bias) ──
+            let targetState;
+            if (partHasOn && !partHasOff) {
                 targetState = true;
                 lastAction = true;
-            } else if (isOff && !isOn) {
+            } else if (partHasOff && !partHasOn) {
                 targetState = false;
                 lastAction = false;
-            } else if (!isOn && !isOff && lastAction !== null) {
-                targetState = lastAction;
+            } else if (partHasOn && partHasOff) {
+                // Ambiguous segment — skip, don't update lastAction
+                continue;
             } else {
-                // If both ON and OFF are present, or neither is present and no history exists
-                return;
+                // No action in segment — inherit only if available
+                if (lastAction === null) continue;
+                targetState = lastAction;
             }
 
-            let partTargetsHandled = false;
+            let handled = false;
 
             // MOTOR
             if (part.includes("fan") || part.includes("motor")) {
                 updateUIState('motor-1', targetState);
                 blynkUpdate(PIN_MAP['motor-1'], targetState ? 1 : 0);
                 results.push(`Motor ${targetState ? 'ON' : 'OFF'}`);
-                partTargetsHandled = true;
+                handled = true;
             }
 
-            // LIGHTS & CONTEXT
-            const isLight = part.includes("light");
+            // LIGHTS
             const nums = normalizeNumbersFromCommand(part);
             const isAll = part.includes("all") || part.includes("everything");
 
-            if (isLight || (!partTargetsHandled && nums.length > 0) || (!partTargetsHandled && isAll)) {
+            if (part.includes("light") || (!handled && (nums.length > 0 || isAll))) {
                 if (isAll) {
                     [1, 2, 3].forEach(i => {
-                        const id = `light-${i}`;
-                        updateUIState(id, targetState);
-                        blynkUpdate(PIN_MAP[id], targetState ? 1 : 0);
+                        updateUIState(`light-${i}`, targetState);
+                        blynkUpdate(PIN_MAP[`light-${i}`], targetState ? 1 : 0);
                     });
                     results.push(`All Lights ${targetState ? 'ON' : 'OFF'}`);
-                    partTargetsHandled = true;
+                    handled = true;
                 } else if (nums.length > 0) {
                     nums.forEach(numStr => {
                         const i = parseInt(numStr);
                         if ([1, 2, 3].includes(i)) {
-                            const id = `light-${i}`;
-                            updateUIState(id, targetState);
-                            blynkUpdate(PIN_MAP[id], targetState ? 1 : 0);
+                            updateUIState(`light-${i}`, targetState);
+                            blynkUpdate(PIN_MAP[`light-${i}`], targetState ? 1 : 0);
                             results.push(`Light ${i} ${targetState ? 'ON' : 'OFF'}`);
                         }
                     });
-                    partTargetsHandled = true;
+                    handled = true;
                 }
             }
 
-            // GENERIC BEHAVIOR (e.g. "turn on")
-            if (!partTargetsHandled && (part.includes("turn") || part.includes("switch"))) {
+            // GENERIC fallback ("turn on" / "switch off" with no specific target)
+            if (!handled && (part.includes("turn") || part.includes("switch"))) {
                 [1, 2, 3].forEach(i => {
-                    const id = `light-${i}`;
-                    updateUIState(id, targetState);
-                    blynkUpdate(PIN_MAP[id], targetState ? 1 : 0);
+                    updateUIState(`light-${i}`, targetState);
+                    blynkUpdate(PIN_MAP[`light-${i}`], targetState ? 1 : 0);
                 });
                 results.push(`All Lights ${targetState ? 'ON' : 'OFF'}`);
-                partTargetsHandled = true;
             }
-        });
-    });
-
-    // Single final status message
-    if (results.length > 0) {
-        setStatus(results.join(', '), 'active');
-    } else if (!/\b(on\s+and\s+off|off\s+and\s+on)\b/i.test(command)) {
-        setStatus('Ignored due to ambiguity or unknown target', 'default');
+        }
     }
+
+    setStatus(
+        results.length > 0 ? results.join(', ') : 'Unknown or ambiguous command',
+        results.length > 0 ? 'active' : 'default'
+    );
 }
 
 // Boot Sequence
