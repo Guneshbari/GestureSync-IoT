@@ -5,17 +5,16 @@
 #include <BlynkSimpleEsp32.h>
 #include <WiFi.h>
 
-
 // -------- WIFI --------
 const char *ssid = "iPhone";
 const char *password = "1234567890";
 
 // -------- LED PINS --------
-int ledPins[] = {5, 18, 19};
+int ledPins[] = {13, 14, 27};
 int numLeds = 3;
 
 // -------- MOTOR PIN --------
-int motorPin = 23; // Fan / Motor
+int motorPin = 26;
 
 // -------- PWM SETTINGS --------
 int freq = 5000;
@@ -80,7 +79,7 @@ BLYNK_WRITE(V2) {
   applyLEDs();
 }
 
-// ALL LIGHTS (ONLY LIGHTS, NOT MOTOR)
+// ALL LIGHTS
 BLYNK_WRITE(V3) {
   int val = param.asInt();
   for (int i = 0; i < numLeds; i++) {
