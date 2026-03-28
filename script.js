@@ -257,56 +257,79 @@ function handleVoiceCommand(command) {
         return;
     }
 
-    const parts = command.split(/\s+and\s+|,/);
-    let lastAction = null;
     let results = [];
+    let lastAction = null;
 
-    parts.forEach(part => {
-        part = part.trim();
-        if (!part) return;
+    // Split command using 'then' first for sequential execution
+    const sequences = command.split(/\s+then\s+/);
 
-        const isOn = ["on", "start", "activate"].some(w => part.includes(w));
-        const isOff = ["off", "stop", "deactivate", "shut", "halt"].some(w => part.includes(w));
+    sequences.forEach(sequence => {
+        // Within each segment, split using 'and' or ','
+        const parts = sequence.split(/\s+and\s+|,/);
 
-        // Conflict handling within a single segment
-        if (isOn && isOff) {
-            console.warn(`[Voice] Ignored ambiguous segment: ${part}`);
-            return;
-        }
+        parts.forEach(part => {
+            part = part.trim();
+            if (!part) return;
 
-        let targetState = null;
-        if (isOn) {
-            targetState = true;
-            lastAction = true;
-        } else if (isOff) {
-            targetState = false;
-            lastAction = false;
-        } else {
-            // Context awareness: inherit last action
-            if (lastAction !== null) {
+            const isOn = ["on", "start", "activate"].some(w => part.includes(w));
+            const isOff = ["off", "stop", "deactivate", "shut", "halt"].some(w => part.includes(w));
+
+            let targetState = null;
+
+            // Strict action resolution
+            if (isOn && !isOff) {
+                targetState = true;
+                lastAction = true;
+            } else if (isOff && !isOn) {
+                targetState = false;
+                lastAction = false;
+            } else if (!isOn && !isOff && lastAction !== null) {
                 targetState = lastAction;
             } else {
-                return; // No inferred action, skip this segment
+                // If both ON and OFF are present, or neither is present and no history exists
+                return;
             }
-        }
 
-        let partTargetsHandled = false;
+            let partTargetsHandled = false;
 
-        // MOTOR
-        if (part.includes("fan") || part.includes("motor")) {
-            updateUIState('motor-1', targetState);
-            blynkUpdate(PIN_MAP['motor-1'], targetState ? 1 : 0);
-            results.push(`Motor ${targetState ? 'ON' : 'OFF'}`);
-            partTargetsHandled = true;
-        }
+            // MOTOR
+            if (part.includes("fan") || part.includes("motor")) {
+                updateUIState('motor-1', targetState);
+                blynkUpdate(PIN_MAP['motor-1'], targetState ? 1 : 0);
+                results.push(`Motor ${targetState ? 'ON' : 'OFF'}`);
+                partTargetsHandled = true;
+            }
 
-        // LIGHTS & CONTEXT
-        const isLight = part.includes("light");
-        const nums = normalizeNumbersFromCommand(part);
-        const isAll = part.includes("all") || part.includes("everything");
+            // LIGHTS & CONTEXT
+            const isLight = part.includes("light");
+            const nums = normalizeNumbersFromCommand(part);
+            const isAll = part.includes("all") || part.includes("everything");
 
-        if (isLight || (!partTargetsHandled && nums.length > 0) || (!partTargetsHandled && isAll)) {
-            if (isAll) {
+            if (isLight || (!partTargetsHandled && nums.length > 0) || (!partTargetsHandled && isAll)) {
+                if (isAll) {
+                    [1, 2, 3].forEach(i => {
+                        const id = `light-${i}`;
+                        updateUIState(id, targetState);
+                        blynkUpdate(PIN_MAP[id], targetState ? 1 : 0);
+                    });
+                    results.push(`All Lights ${targetState ? 'ON' : 'OFF'}`);
+                    partTargetsHandled = true;
+                } else if (nums.length > 0) {
+                    nums.forEach(numStr => {
+                        const i = parseInt(numStr);
+                        if ([1, 2, 3].includes(i)) {
+                            const id = `light-${i}`;
+                            updateUIState(id, targetState);
+                            blynkUpdate(PIN_MAP[id], targetState ? 1 : 0);
+                            results.push(`Light ${i} ${targetState ? 'ON' : 'OFF'}`);
+                        }
+                    });
+                    partTargetsHandled = true;
+                }
+            }
+
+            // GENERIC BEHAVIOR (e.g. "turn on")
+            if (!partTargetsHandled && (part.includes("turn") || part.includes("switch"))) {
                 [1, 2, 3].forEach(i => {
                     const id = `light-${i}`;
                     updateUIState(id, targetState);
@@ -314,35 +337,12 @@ function handleVoiceCommand(command) {
                 });
                 results.push(`All Lights ${targetState ? 'ON' : 'OFF'}`);
                 partTargetsHandled = true;
-            } else if (nums.length > 0) {
-                nums.forEach(numStr => {
-                    const i = parseInt(numStr);
-                    if ([1, 2, 3].includes(i)) {
-                        const id = `light-${i}`;
-                        updateUIState(id, targetState);
-                        blynkUpdate(PIN_MAP[id], targetState ? 1 : 0);
-                        results.push(`Light ${i} ${targetState ? 'ON' : 'OFF'}`);
-                    }
-                });
-                partTargetsHandled = true;
             }
-        }
-
-        // GENERIC BEHAVIOR (e.g. "turn on")
-        if (!partTargetsHandled && (part.includes("turn") || part.includes("switch"))) {
-            [1, 2, 3].forEach(i => {
-                const id = `light-${i}`;
-                updateUIState(id, targetState);
-                blynkUpdate(PIN_MAP[id], targetState ? 1 : 0);
-            });
-            results.push(`All Lights ${targetState ? 'ON' : 'OFF'}`);
-            partTargetsHandled = true;
-        }
+        });
     });
 
     // Single final status message
     if (results.length > 0) {
-        // Output format matched against tests (e.g., "Light 1 OFF, Light 3 ON")
         setStatus(results.join(', '), 'active');
     } else if (!/\b(on\s+and\s+off|off\s+and\s+on)\b/i.test(command)) {
         setStatus('Ignored due to ambiguity or unknown target', 'default');
