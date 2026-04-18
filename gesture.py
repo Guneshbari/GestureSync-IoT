@@ -4,8 +4,14 @@ import requests
 import time
 import threading
 import speech_recognition as sr
+import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
-BLYNK_TOKEN = "uQcOFSmKoKYwxHxJ-2trKV5tkCDYjqnU"
+BLYNK_TOKEN = os.environ.get("BLYNK_TOKEN")
 BLYNK_BASE = "https://blynk.cloud/external/api"
 
 mp_hands = mp.solutions.hands

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -8,10 +9,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <!-- FontAwesome for standard UI icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <!-- Link to separated CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
     <div class="dashboard">
@@ -31,21 +33,21 @@
         <div class="section">
             <div class="section-title">Lighting Space</div>
             <div class="lights-grid">
-                
+
                 <div class="card light-card" id="light-1" onclick="toggleLight(1)">
                     <div class="light-icon-wrapper">
                         <i class="fa-solid fa-lightbulb"></i>
                     </div>
                     <div class="card-label">Light 1</div>
                 </div>
-                
+
                 <div class="card light-card" id="light-2" onclick="toggleLight(2)">
                     <div class="light-icon-wrapper">
                         <i class="fa-solid fa-lightbulb"></i>
                     </div>
                     <div class="card-label">Light 2</div>
                 </div>
-                
+
                 <div class="card light-card" id="light-3" onclick="toggleLight(3)">
                     <div class="light-icon-wrapper">
                         <i class="fa-solid fa-lightbulb"></i>
@@ -57,19 +59,6 @@
         </div>
 
         <!-- APPLIANCES SECTION -->
-        <div class="section">
-            <div class="section-title">Appliances</div>
-            <div class="card motor-card" id="motor-1" onclick="toggleMotor()">
-                <div class="motor-card-left">
-                    <div class="motor-icon-wrapper">
-                        <i class="fa-solid fa-fan"></i>
-                    </div>
-                    <div class="card-label">Fan / Motor</div>
-                </div>
-                <!-- Interactive Toggle UI -->
-                <div class="toggle-switch"></div>
-            </div>
-        </div>
 
         <!-- QUICK ACTIONS GRID -->
         <div class="section">
@@ -99,6 +88,8 @@
     </div>
 
     <!-- Link to separated JS -->
+    <script src="config.js"></script>
     <script src="script.js"></script>
 </body>
+
 </html>

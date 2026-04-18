@@ -1,6 +1,7 @@
-#define BLYNK_TEMPLATE_ID "TMPL3RvORlrpn"
+#include "secrets.h"
+#define BLYNK_TEMPLATE_ID "TMPL36W9Mprce"
 #define BLYNK_TEMPLATE_NAME "SL Project"
-#define BLYNK_AUTH_TOKEN "uQcOFSmKoKYwxHxJ-2trKV5tkCDYjqnU"
+// BLYNK_AUTH_TOKEN is now defined in secrets.h
 
 #include <BlynkSimpleEsp32.h>
 #include <WiFi.h>

@@ -2,3 +2,6 @@ venv
 venv310
 .vscode
 ngrok.exe
+.env
+config.js
+secrets.h
