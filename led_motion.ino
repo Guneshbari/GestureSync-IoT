@@ -1,10 +1,10 @@
-#include "secrets.h"
 #define BLYNK_TEMPLATE_ID "TMPL36W9Mprce"
 #define BLYNK_TEMPLATE_NAME "SL Project"
-// BLYNK_AUTH_TOKEN is now defined in secrets.h
+#define BLYNK_AUTH_TOKEN "Pyg4QC6R_zPxW6HeYkttfLLW3-47q1aF"
 
 #include <BlynkSimpleEsp32.h>
 #include <WiFi.h>
+
 
 // -------- WIFI --------
 const char *ssid = "iPhone";
@@ -15,11 +15,7 @@ int ledPins[] = {13, 14, 27};
 int numLeds = 3;
 
 // -------- MOTOR PIN --------
-int motorPin = 26;
-
-// -------- PWM SETTINGS --------
-int freq = 5000;
-int resolution = 8;
+int motorPin = 33;
 
 // -------- STATE --------
 int ledState[3] = {0, 0, 0};
@@ -29,26 +25,41 @@ int brightness = 150;
 void setup() {
   Serial.begin(115200);
 
-  // LED SETUP
+  // Set pins as OUTPUT (IMPORTANT)
   for (int i = 0; i < numLeds; i++) {
-    ledcAttach(ledPins[i], freq, resolution);
-    ledcWrite(ledPins[i], 0);
+    pinMode(ledPins[i], OUTPUT);
+  }
+  pinMode(motorPin, OUTPUT);
+
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
   }
 
-  // MOTOR SETUP
-  ledcAttach(motorPin, freq, resolution);
-  ledcWrite(motorPin, 0);
+  Serial.println("\nConnected!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
 
-  // Blynk
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, password);
 
   Serial.println("System Ready!");
 }
 
+// -------- SYNC ON CONNECT --------
+BLYNK_CONNECTED() {
+  Serial.println("Blynk Connected!");
+  Blynk.syncAll();
+}
+
 // -------- APPLY LED STATE --------
 void applyLEDs() {
+  Serial.println("Applying LED states...");
+
   for (int i = 0; i < numLeds; i++) {
-    ledcWrite(ledPins[i], ledState[i] ? brightness : 0);
+    analogWrite(ledPins[i], ledState[i] ? brightness : 0);
   }
 
   // Sync UI
@@ -64,25 +75,40 @@ void applyLEDs() {
 
 // Light 1
 BLYNK_WRITE(V0) {
-  ledState[0] = param.asInt();
+  int val = param.asInt();
+  Serial.print("V0: ");
+  Serial.println(val);
+
+  ledState[0] = val;
   applyLEDs();
 }
 
 // Light 2
 BLYNK_WRITE(V1) {
-  ledState[1] = param.asInt();
+  int val = param.asInt();
+  Serial.print("V1: ");
+  Serial.println(val);
+
+  ledState[1] = val;
   applyLEDs();
 }
 
 // Light 3
 BLYNK_WRITE(V2) {
-  ledState[2] = param.asInt();
+  int val = param.asInt();
+  Serial.print("V2: ");
+  Serial.println(val);
+
+  ledState[2] = val;
   applyLEDs();
 }
 
 // ALL LIGHTS
 BLYNK_WRITE(V3) {
   int val = param.asInt();
+  Serial.print("V3 (ALL): ");
+  Serial.println(val);
+
   for (int i = 0; i < numLeds; i++) {
     ledState[i] = val;
   }
@@ -92,16 +118,19 @@ BLYNK_WRITE(V3) {
 // Brightness
 BLYNK_WRITE(V4) {
   brightness = param.asInt();
+  Serial.print("Brightness: ");
+  Serial.println(brightness);
+
   applyLEDs();
 }
 
 // -------- MOTOR CONTROL --------
 BLYNK_WRITE(V5) {
   int val = param.asInt();
-  ledcWrite(motorPin, val ? 255 : 0);
+  Serial.print("Motor: ");
+  Serial.println(val);
 
-  Serial.print("Motor State: ");
-  Serial.println(val ? "ON" : "OFF");
+  digitalWrite(motorPin, val ? HIGH : LOW);
 }
 
 // -------- LOOP --------

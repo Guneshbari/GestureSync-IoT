@@ -4,7 +4,7 @@
  */
 
 // --- 1. CONFIGURATION ---
-const TOKEN = CONFIG.BLYNK_TOKEN; // Active project token
+const TOKEN = "Pyg4QC6R_zPxW6HeYkttfLLW3-47q1aF"; // Active project token
 const BLYNK_BASE = 'https://blynk.cloud/external/api';
 
 const PIN_MAP = {

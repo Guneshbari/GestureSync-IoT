@@ -10,7 +10,7 @@ try:
 except ImportError:
     pass
 
-BLYNK_TOKEN = os.environ.get("BLYNK_TOKEN")
+BLYNK_TOKEN = "Pyg4QC6R_zPxW6HeYkttfLLW3-47q1aF"
 BLYNK_BASE = "https://blynk.cloud/external/api"
 
 mp_hands = mp.solutions.hands
@@ -97,7 +97,7 @@ def main():
                 lm = [[p.x, p.y] for p in hand.landmark]
                 tips = [8, 12, 16]
                 pips = [6, 10, 14]
-                fingers = [1 if lm[t][1] < lm[p][1] else 0 for t, p in zip(tips, pips)]
+                fingers = [1 if lm[t][1] < lm[p][q1] else 0 for t, p in zip(tips, pips)]
                 hands_data.append(fingers)
 
             if current_time - controller.last_action_time > controller.action_delay:
